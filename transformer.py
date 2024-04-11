@@ -48,7 +48,7 @@ class MultiHeadAttention(nn.Module):
                 torch.Tensor: Output tensor of shape (batch_size, seq_length_q, model_size).
         """
 
-        attn = torch.matmul(q, k.transpose(-2, -1)) / torch.sqrt(torch.FloatTensor([self.head_dim]))
+        attn = torch.matmul(q, k.transpose(-2, -1)) / torch.sqrt(torch.FloatTensor([self.head_dim])).to(device)
         if mask is not None:
             attn = attn.masked_fill(mask == 0, -1e9)
         attn = torch.softmax(attn, dim=-1)
@@ -300,8 +300,7 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     # noinspection PyUnresolvedReferences
-    @staticmethod
-    def generate_mask(src, tgt):
+    def generate_mask(self, src, tgt):
         """
             Generate masks for source and target sequences.
 
@@ -315,7 +314,7 @@ class Transformer(nn.Module):
         src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
         tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
         seq_length = tgt.size(1)
-        nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)).bool()
+        nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)).bool().to(device)
         tgt_mask = tgt_mask & nopeak_mask
         return src_mask, tgt_mask
 
@@ -347,6 +346,9 @@ class Transformer(nn.Module):
 
 
 if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Using device:", device)
+
     """ Sample data and transformer preparation """
     src_vocab_size = 5000
     tgt_vocab_size = 5000
@@ -358,11 +360,11 @@ if __name__ == '__main__':
     dropout = 0.1
 
     transformer = Transformer(src_vocab_size, tgt_vocab_size, model_size, heads_num, layers_num, ff_size, max_seq_length,
-                              dropout)
+                              dropout).to(device)
 
     # Generate random sample data
-    src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-    tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    src_data = torch.randint(1, src_vocab_size, (64, max_seq_length)).to(device)  # (batch_size, seq_length)
+    tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length)).to(device)  # (batch_size, seq_length)
 
     """ Training the model """
     criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -382,8 +384,8 @@ if __name__ == '__main__':
     transformer.eval()
 
     # Generate random sample validation data
-    val_src_data = torch.randint(1, src_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
-    val_tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length))  # (batch_size, seq_length)
+    val_src_data = torch.randint(1, src_vocab_size, (64, max_seq_length)).to(device)  # (batch_size, seq_length)
+    val_tgt_data = torch.randint(1, tgt_vocab_size, (64, max_seq_length)).to(device)  # (batch_size, seq_length)
 
     with torch.no_grad():
         val_output = transformer(val_src_data, val_tgt_data[:, :-1])
